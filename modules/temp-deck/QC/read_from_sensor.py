@@ -168,7 +168,7 @@ def assert_tempdeck_has_serial(tempdeck):
     assert info.get('model') != 'none'
 
 
-def create_data_file(tempdeck):
+def create_data_file(file_name):
     global results_file_path, original_results_file_path, dir_path
 
     # create the folder to save the test results
@@ -180,14 +180,11 @@ def create_data_file(tempdeck):
     if not os.path.isdir(data_path):
         os.mkdir(data_path)
 
-    serial_number = tempdeck.get_device_info().get('serial')
-    if not serial_number:
-        raise RuntimeError('Module has no ID, please write ID before testing')
     date_string = datetime.utcfromtimestamp(time.time()).strftime(
         '%Y-%m-%d_%H-%M-%S')
-    results_file_path = original_results_file_path.format(id=serial_number, date=date_string)
+    results_file_path = original_results_file_path.format(id=file_name, date=date_string)
     results_file_path = os.path.join(data_path, results_file_path)
-    write_line_to_file('Temp-Deck: {}'.format(serial_number))
+    write_line_to_file('Reading from sensor only')
 
 
 def wait_for_button_click():
@@ -278,34 +275,21 @@ def run_test(tempdeck, sensor, targets):
 def main():
     data_file_created = False
     try:
-        robot._driver._set_button_light(blue=True)
         sensor = connect_to_external_sensor()
-        tempdeck = connect_to_temp_deck()
-        create_data_file(tempdeck)
+        create_data_file('Reading-Sensor-Only')
         data_file_created = True
-        if run_test(tempdeck, sensor, TARGET_TEMPERATURES):
-            robot._driver._set_button_light(green=True)
-        else:
-            robot._driver._set_button_light(red=True)
+        external_temp, new_temp = read_temperature_sensors(sensor);
+        write_line_to_file(
+            'Sensors: old={0} new={1}'.format(external_temp, new_temp))
     except Exception as e:
         if data_file_created:
             write_line_to_file(str(e))
-        robot._driver._set_button_light(red=True)
     finally:
         try:
             sensor.close()
-            tempdeck.disengage()
-            tempdeck.disconnect()
         except:
             pass
 
 
 if __name__ == '__main__':
-    robot._driver.turn_off_button_light()
-    while True:
-        if os.environ.get('RUNNING_ON_PI'):
-            print('Press the BUTTON to start...')
-            wait_for_button_click()
-        else:
-            input('Press ENTER when ready to run...')
-        main()
+    main()

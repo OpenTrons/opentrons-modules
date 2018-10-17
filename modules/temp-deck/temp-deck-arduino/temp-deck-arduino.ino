@@ -148,6 +148,16 @@ const int start_bootloader_timeout = 1000;
 /////////////////////////////////
 /////////////////////////////////
 
+unsigned long test_timestamp = 0;
+#define test_stay_at_temp_millis 300000
+bool test_was_stabilizing = false;
+#define test_high_temp 95
+#define test_low_temp 8
+
+/////////////////////////////////
+/////////////////////////////////
+/////////////////////////////////
+
 bool is_stabilizing() {
   return abs(TARGET_TEMPERATURE - CURRENT_TEMPERATURE) < STABILIZING_ZONE;
 }
@@ -552,9 +562,43 @@ void setup() {
 
   turn_off_target();
   lights.startup_animation(CURRENT_TEMPERATURE, 2000);
+
+  set_target_temperature(test_high_temp);
+  MASTER_SET_A_TARGET = true;
+  test_was_stabilizing = false;
+}
+
+void run_test() {
+  if (is_stabilizing()) {
+    if (!test_was_stabilizing) {
+      test_was_stabilizing = true;
+      test_timestamp = millis();  // start timing once we've begun stabilizing
+    }
+    else {
+      // Serial.print("millis: "); Serial.print(millis());
+      // Serial.print(", timestamp: "); Serial.print(test_timestamp);
+      // Serial.print(", interval: "); Serial.print(test_stay_at_temp_millis);
+      // Serial.print(", diff: "); Serial.print(millis() - test_timestamp);
+      // Serial.print(", test: "); Serial.print(millis() - test_timestamp > test_stay_at_temp_millis);
+      // Serial.println();
+      if (millis() - test_timestamp > test_stay_at_temp_millis) {
+        if (is_targeting_cold_zone()) {
+          set_target_temperature(test_high_temp);
+        }
+        else {
+          set_target_temperature(test_low_temp);
+        }
+      }
+    }
+  }
+  else {
+    test_was_stabilizing = false;
+  }
 }
 
 void loop(){
+
+  run_test();
 
   turn_off_serial_lights();
 

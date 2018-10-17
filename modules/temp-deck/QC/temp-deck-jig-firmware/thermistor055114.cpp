@@ -1,8 +1,8 @@
-#include "Thermistor.h"
+#include "Thermistor055114.h"
 
-Thermistor::Thermistor(){}
+Thermistor055114::Thermistor055114(){}
 
-void Thermistor::_calculate_average_adc() {
+void Thermistor055114::_calculate_average_adc() {
   _average_adc = 0;
   for (uint8_t i=0; i< THERMISTOR_NUM_SAMPLES; i++) {
      _average_adc += samples[i];
@@ -10,7 +10,11 @@ void Thermistor::_calculate_average_adc() {
   _average_adc /= THERMISTOR_NUM_SAMPLES;
 }
 
-float Thermistor::temperature(){
+void Thermistor055114::set_pin(int _pin) {
+  pin = _pin;
+}
+
+float Thermistor055114::temperature(){
   _calculate_average_adc();
   if (_average_adc < TABLE[TABLE_SIZE-1][0]) {
     return TABLE[TABLE_SIZE-1][1];
@@ -31,8 +35,8 @@ float Thermistor::temperature(){
   }
 }
 
-bool Thermistor::update() {
-  samples[sample_index] = analogRead(thermistor_pin);
+bool Thermistor055114::update() {
+  samples[sample_index] = analogRead(pin);
   sample_index++;
   if (sample_index >= THERMISTOR_NUM_SAMPLES) {
     sample_index = 0;

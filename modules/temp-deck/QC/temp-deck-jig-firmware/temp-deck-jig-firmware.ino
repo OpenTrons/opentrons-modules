@@ -1,40 +1,46 @@
-#include "thermistor.h"
+#include "thermistorKS103J2.h"
+#include "thermistor055114.h"
 
-#include "lights.h"
+ThermistorKS103J2 thermistor_old = ThermistorKS103J2();
+Thermistor055114 thermistor_new = Thermistor055114();
 
-
-Lights lights = Lights();
-
-Thermistor thermistor = Thermistor();
-float current_temp_thermistor = 0.0;
+float current_temp_thermistor_old = 0.0;
+float current_temp_thermistor_new = 0.0;
 
 bool auto_print = false;
 unsigned long print_timestamp = 0;
 const int print_interval = 250;
 
 void read_thermistor() {
-    if (thermistor.update()) {
-        current_temp_thermistor = thermistor.temperature();
-        lights.display_number(current_temp_thermistor + 0.5, true);
+    if (thermistor_old.update()) {
+        current_temp_thermistor_old = thermistor_old.temperature();
+    }
+    if (thermistor_new.update()) {
+        current_temp_thermistor_new = thermistor_new.temperature();
     }
 }
 
 void print_temperature(bool force=false) {
     if (auto_print && print_timestamp + print_interval < millis()) {
         print_timestamp = millis();
-        Serial.println(current_temp_thermistor);
+        Serial.print(current_temp_thermistor_old);
+        Serial.print(',');
+        Serial.println(current_temp_thermistor_new);
     }
     else if (!auto_print && force) {
-        Serial.println(current_temp_thermistor);
+        Serial.print(current_temp_thermistor_old);
+        Serial.print(',');
+        Serial.println(current_temp_thermistor_new);
     }
 }
 
 void setup() {
     Serial.begin(115200);
-    while (!thermistor.update()) {}
-    current_temp_thermistor = thermistor.temperature();
-    lights.setup_lights();
-    lights.set_numbers_brightness(0.25);
+    thermistor_old.set_pin(A0);
+    thermistor_new.set_pin(A5);
+    while (!thermistor_old.update()) {}
+    while (!thermistor_new.update()) {}
+    current_temp_thermistor_old = thermistor_old.temperature();
 }
 
 void loop() {

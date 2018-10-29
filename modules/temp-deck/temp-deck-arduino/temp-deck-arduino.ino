@@ -115,14 +115,6 @@ unsigned long debug_plotter_timestamp = 0;
 //    3) once fan is off, turn on the peltiers to the correct state (potentially drawing 4.3 amps!)
 //    4) after the the peltiers' current has dropping some, turn the fan back on
 
-// uncomment to turn off system after setting the temperature
-#define CONSERVE_POWER_ON_SET_TARGET
-
-#ifdef CONSERVE_POWER_ON_SET_TARGET
-unsigned long SET_TEMPERATURE_TIMESTAMP = 0;
-#define millis_till_fan_turns_off 2000 // how long to wait before #1 and #2 from the list above
-#define millis_till_peltiers_drop_current 2000 // how long to wait before #2 and #3 from the list above
-#endif
 
 // -1.0 is full cold peltiers, +1.0 is full hot peltiers, can be between the two
 double TEMPERATURE_SWING;
@@ -143,6 +135,8 @@ Memory memory = Memory();  // reads from EEPROM to find device's unique serial, 
 
 unsigned long start_bootloader_timestamp = 0;
 const int start_bootloader_timeout = 1000;
+
+bool fan_set_manually = false;
 
 /////////////////////////////////
 /////////////////////////////////
@@ -208,21 +202,7 @@ void set_target_temperature(double target_temp){
       F("Target temperature too high, setting to TEMPERATURE_MAX degrees"));
   }
 
-#ifdef CONSERVE_POWER_ON_SET_TARGET
-  // in case the fan was PREVIOUSLY set on high
-  if (is_fan_on_high()) {
-    SET_TEMPERATURE_TIMESTAMP = millis();
-  }
-#endif
-
   TARGET_TEMPERATURE = target_temp;  // set the target temperature
-
-#ifdef CONSERVE_POWER_ON_SET_TARGET
-  // in case the fan is NOW GOING TO be set on high (with new target)
-  if (is_fan_on_high()) {
-    SET_TEMPERATURE_TIMESTAMP = millis();
-  }
-#endif
 
   lights.flash_on();
 
@@ -329,29 +309,8 @@ void adjust_pid_on_new_target() {
 /////////////////////////////////
 /////////////////////////////////
 
-void stabilize_to_target_temp(bool set_fan=true){
-
-#ifdef CONSERVE_POWER_ON_SET_TARGET
-  // first, avoid drawing too much current when the target was just changed
-  unsigned long now = millis();
-  if (SET_TEMPERATURE_TIMESTAMP > now) SET_TEMPERATURE_TIMESTAMP = now;  // handle rollover
-  unsigned long end_time = SET_TEMPERATURE_TIMESTAMP + millis_till_fan_turns_off;
-  if (end_time > now) {
-    peltiers.disable_peltiers();
-    set_fan_power(FAN_OFF);
-    return;  // EXIT the function, do nothing, wait
-  }
-  end_time += millis_till_peltiers_drop_current;
-  if (end_time > now) {
-    set_fan = false;
-  }
-#endif
-
-  // seconds, set the fan to the correct intensity
-  if (set_fan == false) {
-    set_fan_power(FAN_OFF);
-  }
-  else if (is_fan_on_high()) {
+void set_fan_from_state() {
+  if (is_fan_on_high()) {
     set_fan_power(FAN_HIGH);
   }
   else {
@@ -359,19 +318,18 @@ void stabilize_to_target_temp(bool set_fan=true){
     else if (is_v4_0_fan) set_fan_power(FAN_V4_0_LOW);
     else set_fan_power(FAN_LOW);
   }
-
-  // third, update the
-  set_peltiers_from_pid();
 }
 
-void stabilize_to_room_temp(bool set_fan=true) {
+/////////////////////////////////
+/////////////////////////////////
+/////////////////////////////////
+
+void stabilize_to_room_temp() {
   if (is_burning_hot()) {
     set_peltiers_from_pid();
-    if (set_fan) {
-      if (is_v3_0_fan) set_fan_power(FAN_V3_0_LOW);
-      else if (is_v4_0_fan) set_fan_power(FAN_V4_0_LOW);
-      else set_fan_power(FAN_LOW);
-    }
+    if (is_v3_0_fan) set_fan_power(FAN_V3_0_LOW);
+    else if (is_v4_0_fan) set_fan_power(FAN_V4_0_LOW);
+    else set_fan_power(FAN_LOW);
   }
   else {
     peltiers.disable_peltiers();
@@ -480,9 +438,15 @@ void read_gcode(){
             set_target_temperature(gcode.parsed_number);
             MASTER_SET_A_TARGET = true;
           }
+          if (gcode.read_number('F')) {
+            set_fan_power(gcode.parsed_number / 100.0);
+            fan_set_manually = true;
+          }
+          else fan_set_manually = false;
           break;
         case GCODE_DISENGAGE:
           turn_off_target();
+          fan_set_manually = false;
           break;
         case GCODE_DEVICE_INFO:
           gcode.print_device_info(device_serial, device_model, device_version);
@@ -583,7 +547,8 @@ void loop(){
 
   if (myPID.Compute()) {  // Compute() should run every loop
     if (MASTER_SET_A_TARGET) {
-      stabilize_to_target_temp();
+      set_peltiers_from_pid();
+      if (!fan_set_manually) set_fan_from_state();
     }
     else {
       stabilize_to_room_temp();

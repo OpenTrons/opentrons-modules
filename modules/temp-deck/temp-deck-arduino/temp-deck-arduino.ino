@@ -46,9 +46,12 @@
 // values used to scale the thermistors temperature
 // to more accurately reflect the temperature of the top-plate
 #define THERMISTOR_OFFSET_LOW_TEMP 5.25
-#define THERMISTOR_OFFSET_LOW_VALUE -0.1
+#define THERMISTOR_OFFSET_LOW_VALUE_A -0.1
+#define THERMISTOR_OFFSET_LOW_VALUE_B -0.7
 #define THERMISTOR_OFFSET_HIGH_TEMP 95
-#define THERMISTOR_OFFSET_HIGH_VALUE -1.4
+#define THERMISTOR_OFFSET_HIGH_VALUE_A 0.6
+#define THERMISTOR_OFFSET_HIGH_VALUE_B -1.4
+float thermistor_offsets[2] = {0.0, 0.0};
 const float THERMISTOR_OFFSET_HIGH_TEMP_DIFF = THERMISTOR_OFFSET_HIGH_TEMP - TEMPERATURE_ROOM;
 const float THERMISTOR_OFFSET_LOW_TEMP_DIFF = TEMPERATURE_ROOM - THERMISTOR_OFFSET_LOW_TEMP;
 float _offset_temp_diff = 0.0;
@@ -418,10 +421,10 @@ void read_thermistor_and_apply_offset() {
     // depending on how far below/above room temperature we currently are
     _offset_temp_diff = CURRENT_TEMPERATURE - TEMPERATURE_ROOM;
     if (_offset_temp_diff > 0) {
-      CURRENT_TEMPERATURE += (_offset_temp_diff / THERMISTOR_OFFSET_HIGH_TEMP_DIFF) * THERMISTOR_OFFSET_HIGH_VALUE;
+      CURRENT_TEMPERATURE += (_offset_temp_diff / THERMISTOR_OFFSET_HIGH_TEMP_DIFF) * thermistor_offsets[1];
     }
     else {
-      CURRENT_TEMPERATURE += (abs(_offset_temp_diff) / THERMISTOR_OFFSET_LOW_TEMP_DIFF) * THERMISTOR_OFFSET_LOW_VALUE;
+      CURRENT_TEMPERATURE += (abs(_offset_temp_diff) / THERMISTOR_OFFSET_LOW_TEMP_DIFF) * thermistor_offsets[0];
     }
   }
 }
@@ -533,6 +536,15 @@ void setup() {
 
   if (device_model.indexOf("v3.0") > 0) is_v3_0_fan = true;
   else if (device_model.indexOf("v4.0") > 0) is_v4_0_fan = true;
+
+  if (device_serial.indexOf("A") > 0) {
+    thermistor_offsets[0] = THERMISTOR_OFFSET_LOW_VALUE_A;
+    thermistor_offsets[1] = THERMISTOR_OFFSET_HIGH_VALUE_A;
+  }
+  else if (device_serial.indexOf("B") > 0) {
+    thermistor_offsets[0] = THERMISTOR_OFFSET_LOW_VALUE_B;
+    thermistor_offsets[1] = THERMISTOR_OFFSET_HIGH_VALUE_B;
+  }
 
   lights.setup_lights();
   lights.set_numbers_brightness(0.25);
